@@ -3,6 +3,7 @@ package Client;
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 public class Client
 {
@@ -31,35 +32,24 @@ public class Client
      */
     private int mDefaultDataPortNumber;
 
+    /**
+     * Maximum bufferSize of the TCP to obtain data
+     */
+    private int mBufferSize;
 
-    public Client(String serveradress, int serverport, int defaultPort)
+
+    public Client(String serveradress, int serverport, int defaultPort, int bufferSize)
     {
         this.mServerAddress = serveradress;
         this.mServerport = serverport;
         this.mDefaultDataPortNumber = defaultPort;
+        this.mBufferSize = bufferSize;
 
         ConnectCommandLineSocket();
         SendFileRequest();
 
     }
 
-    //necessary to write current list of files to a text file
-    public static void saveToFile(String outputFileName, ArrayList<String> currentFile)
-    {
-        try
-        {
-            PrintWriter pw = new PrintWriter(outputFileName);
-            for (String line : currentFile)
-            {
-                pw.println(line);
-            }
-            pw.close();
-        }
-        catch (IOException e)
-        {
-            System.err.println("Writing to the file cannot be done!");
-        }
-    }
 
     /**
      * This function handles the connection of the command line between the client and server
@@ -71,6 +61,10 @@ public class Client
         try
         {
             mCommandLineSocket = new Socket(mServerAddress, mServerport);
+            /*
+            Persistent and permanent connection
+             */
+            mCommandLineSocket.setKeepAlive(true);
             mBufferedReader = new BufferedReader(new InputStreamReader(mCommandLineSocket.getInputStream()));
             mPrintWriter = new PrintWriter(mCommandLineSocket.getOutputStream());
         }
@@ -108,23 +102,56 @@ public class Client
             /*
             Creation file output stream to write on the file
              */
-            int portNumber = mDefaultDataPortNumber;
+            //int portNumber = mDefaultDataPortNumber;
+            int portNumber;
+            DataTransferThread[] parallelTransfers = new DataTransferThread[dataPortsNumber];
             BufferedOutputStream bs = new BufferedOutputStream(new FileOutputStream(fileName));
+
             for (int i = 0; i < dataPortsNumber; i++)
             {
-                System.out.println("Opening port on: " + dataPortsNumber);
-                Socket s = new Socket(mServerAddress, portNumber);
-                InputStream is2 = s.getInputStream();
-                byte[] bytearray = new byte[8192];
-                for (int j = 0; j < chunkSize / 8192 + 1; j++)
+                portNumber = Integer.parseInt(mBufferedReader.readLine());
+                System.out.println("Client: Opening port on: " + portNumber);
+                Socket socket = new Socket(mServerAddress, portNumber);
+//                try
+//                {
+//                    TimeUnit.SECONDS.sleep(1);
+//                }
+//                catch (Exception e)
+//                {
+//                    e.printStackTrace();
+//                }
+                parallelTransfers[i] = new DataTransferThread(socket, chunkSize, mBufferSize);
+                parallelTransfers[i].start();
+                //portNumber++;
+            }
+
+            for(int i = 0 ; i < dataPortsNumber ; i++)
+            {
+                /*
+                Waiting for all parallel transfer data sockets to be done
+                 */
+                try
                 {
-                    int read = is2.read(bytearray, 0, bytearray.length);
-                    bs.write(bytearray, 0, bytearray.length);
+                    parallelTransfers[i].join();
                 }
-                portNumber++;
+                catch (InterruptedException e)
+                {
+                    e.printStackTrace();
+                }
+            }
+
+            /*
+            Writing from the buffer of each parallel data transfer to the file
+             */
+            for(int i = 0; i < dataPortsNumber; i++)
+            {
+                System.out.println("Parallel data socket line number " + i + " has been " + parallelTransfers[i].getState());
+                bs.write(parallelTransfers[i].getByteArray(), 0, parallelTransfers[i].getByteArray().length);
             }
             bs.close();
+            mCommandLineSocket.close();
             System.out.println("Client: File completely received");
+
 
         }
         catch (IOException e)

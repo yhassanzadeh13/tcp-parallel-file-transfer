@@ -9,24 +9,30 @@ import java.net.Socket;
 public class DataTransferThread extends Thread
 {
 
-    public BufferedInputStream mBufferedInputStream;
+
     public OutputStream mOutputStream;
     public PrintWriter mPrintWriter;
     public byte[] mBytearray;
     public int mChunkSize;
     protected Socket mSocket;
 
+    /**
+     * Maximum bufferSize of the TCP to obtain data
+     */
+    private int mBufferSize;
 
-    public DataTransferThread(Socket s, BufferedInputStream filestream, int chunkSize, byte[] bytearray)
+    /**
+    Transfer rounds denotes the TCP buffers that we need to consider while sending the chunk of file
+    */
+    private int mTransferRounds;
+
+    public DataTransferThread(Socket socket, int transferRounds, int chunkSize, byte[] bytearray, int bufferSize)
     {
-        this.mSocket = s;
-        mBufferedInputStream = filestream;
+        this.mSocket = socket;
+        this.mTransferRounds = transferRounds;
         this.mChunkSize = chunkSize;
         this.mBytearray = new byte[bytearray.length];
-//        for (int i = 0; i < bytearray.length; i++)
-//        {
-//            this.mBytearray[i] = bytearray[i];
-//        }
+        this.mBufferSize = bufferSize;
         System.arraycopy(bytearray, 0, this.mBytearray, 0, mBytearray.length);
     }
 
@@ -43,23 +49,15 @@ public class DataTransferThread extends Thread
         try
         {
             mPrintWriter = new PrintWriter(mSocket.getOutputStream());
-            /*
-            Dividing the output stream bytes manually into
-            packages of 8192 bytes to make it faster to transfer.
-            The default value mBufferedReader very large and makes the transfer slow
-            */
-            for (int i = 0; i < mChunkSize / 8192 + 1; i++)
+
+            for (int i = 0; i < mTransferRounds; i++)
             {
-                /*
-                Reading a 8192 byte packet of bytes from input stream and casting
-                that to the byte array.
-                 */
-                mBufferedInputStream.read(mBytearray, 0, mBytearray.length);
+                //mBufferedInputStream.read(mBytearray, 0, mBytearray.length);
 
                 /*
                 Writing the byte array
                  */
-                mOutputStream.write(mBytearray, 0, mBytearray.length);
+                mOutputStream.write(mBytearray, i * mBufferSize, Math.min(mBufferSize, mChunkSize - i * mBufferSize));
                 mOutputStream.flush();
             }
 

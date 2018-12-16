@@ -34,13 +34,19 @@ public class ServerThread extends Thread
      */
     private int mParallelPortsNum;
 
-    public ServerThread(Socket socket, File file, int parallelPortsNum, int defaultDataPortNumber)
+    /**
+     * Maximum bufferSize of the TCP to obtain data
+     */
+    private int mBufferSize;
+
+    public ServerThread(Socket socket, File file, int parallelPortsNum, int defaultDataPortNumber, int bufferSize)
     {
         super();
         this.mSocket = socket;
         this.mFile = file;
         this.mParallelPortsNum = parallelPortsNum;
         this.mDefaultDataPortNumber = defaultDataPortNumber;
+        this.mBufferSize = bufferSize;
         try
         {
             mBufferedReader = new BufferedReader(new InputStreamReader(mSocket.getInputStream()));
@@ -55,13 +61,6 @@ public class ServerThread extends Thread
     @Override
     public void run()
     {
-        /*
-        Computing the size of the file in MB
-        The length method returns the size in bytes
-        The returned value of the length method mBufferedInputStream long not int
-         */
-        long size_of_file = (mFile.length() / 1024) / 1024;
-
 
         /*
         Sending the file name to the client
@@ -79,6 +78,7 @@ public class ServerThread extends Thread
         Size of each chunk of the file to be transmitted
          */
         int chunkSize = (int) mFile.length() / mParallelPortsNum;
+        System.out.println("Chunk size " + chunkSize);
         /*
         Sending the chunk size of the file to the client
          */
@@ -106,26 +106,93 @@ public class ServerThread extends Thread
         /*
         Sending mBufferedInputStream started
          */
+        //long startTime = System.currentTimeMillis();
+        DataTransferThread[] dataTransferThread = new DataTransferThread[mParallelPortsNum];
+
+        /*
+        byteArray[i][] corresponds to the byte representation of the chunk of data that is aimed to
+        transferred over the ith parallel data socket line
+         */
+        byte[][] byteArray = new byte[mParallelPortsNum][chunkSize];
+        /*
+        Transfer rounds denotes the TCP buffers that we need to consider while sending the chunk of file
+         */
+        int transferRounds = (chunkSize / mBufferSize) + 1;
+        for(int i = 0; i < mParallelPortsNum; i++)
+        {
+            for (int j = 0; j < transferRounds; j++)
+            {
+                try
+                {
+                    fileStream.read(byteArray[i], j * mBufferSize, Math.min(mBufferSize, chunkSize - j * mBufferSize));
+                }
+                catch (IOException e)
+                {
+                    e.printStackTrace();
+                }
+
+            }
+        }
         for (int i = 0; i < mParallelPortsNum; i++)
         {
-            ServerSocket sc;
+            /*
+            Openning a data line socket with the client
+             */
+            ServerSocket serverSocket;
             try
             {
-                sc = new ServerSocket(currentPortNumber);
-                Socket s = sc.accept();
-                System.out.println("Parallel data socket established with client: " + s.getRemoteSocketAddress() + " on port " + sc.getLocalPort());
-                byte[] bytearray = new byte[8192];
+                //serverSocket = new ServerSocket(currentPortNumber);
+                serverSocket = openDataSocket(currentPortNumber);
+                currentPortNumber = serverSocket.getLocalPort();
+                mPrintWriter.println(currentPortNumber);
+                mPrintWriter.flush();
+                Socket socket = serverSocket.accept();
+                System.out.println("Parallel data socket established with client: " + socket.getRemoteSocketAddress() + " on port " + socket.getLocalPort());
 
-                DataTransferThread dataTransferThread = new DataTransferThread(s, fileStream, chunkSize, bytearray);
-                dataTransferThread.start();
+//                byte[] byteArray = new byte[chunkSize];
+//                for (int j = 0; j < transferRounds; j++)
+//                {
+//                    fileStream.read(byteArray, j * mBufferSize, Math.min(mBufferSize, chunkSize - j * mBufferSize));
+//                }
+                dataTransferThread[i] = new DataTransferThread(socket, transferRounds, chunkSize, byteArray[i], mBufferSize);
+                dataTransferThread[i].start();
             }
             catch (IOException e)
             {
                 e.printStackTrace();
             }
-            currentPortNumber++;
+            //currentPortNumber++;
         }
+        for(int i = 0 ; i < mParallelPortsNum ; i++)
+        {
+            try
+            {
+                dataTransferThread[i].join();
+            }
+            catch (InterruptedException ex)
+            {
+                ex.printStackTrace();
+            }
+        }
+        //long finishTime = System.currentTimeMillis();
+        //System.out.println("The entire file transfer took " + (finishTime - startTime) + " ms");
         System.out.println("File has been transferred successfully");
+    }
+
+    private ServerSocket openDataSocket(int lastPortTried)
+    {
+        lastPortTried++;
+        ServerSocket socket;
+        try
+        {
+            socket = new ServerSocket(lastPortTried);
+        }
+        catch (IOException ex)
+        {
+            socket = openDataSocket(lastPortTried);
+        }
+
+        return socket;
     }
 }
 

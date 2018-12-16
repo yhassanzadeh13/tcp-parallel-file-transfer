@@ -14,14 +14,18 @@ public class Server
     private int mParallelPortsNumber;
     private int mDefaultDataPort;
 
-
+    /**
+     * Maximum bufferSize of the TCP to obtain data
+     */
+    private int mBufferSize;
 
     //constructor
-    public Server(int port, String fileAddress, int parallelPortsNumber, int defaultDataPort)
+    public Server(int port, String fileAddress, int parallelPortsNumber, int defaultDataPort, int bufferSize)
     {
         this.mFileAddress = fileAddress;
         this.mParallelPortsNumber = parallelPortsNumber;
         this.mDefaultDataPort = defaultDataPort;
+        this.mBufferSize = bufferSize;
 
         try
         {
@@ -51,7 +55,7 @@ public class Server
             File file = new File(mFileAddress);
             socket = mServerSocket.accept();
             System.out.println("Server: Command line established, a client " + socket.getRemoteSocketAddress() + " connected.");
-            ServerThread serverThread = new ServerThread(socket, file, mParallelPortsNumber, mDefaultDataPort);
+            ServerThread serverThread = new ServerThread(socket, file, mParallelPortsNumber, mDefaultDataPort, mBufferSize);
             serverThread.start();
         }
         catch (IOException ex)
