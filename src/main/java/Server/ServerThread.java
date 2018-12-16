@@ -77,7 +77,8 @@ public class ServerThread extends Thread
         /*
         Size of each chunk of the file to be transmitted
          */
-        int chunkSize = (int) mFile.length() / mParallelPortsNum;
+        //ToDO for supporting larger size of files, we need to change the chunkSize into long
+        int chunkSize = (int) (( mFile.length() / mParallelPortsNum) + ((mFile.length() % mParallelPortsNum == 0)?0:1));
         System.out.println("Chunk size " + chunkSize);
         /*
         Sending the chunk size of the file to the client
@@ -117,14 +118,14 @@ public class ServerThread extends Thread
         /*
         Transfer rounds denotes the TCP buffers that we need to consider while sending the chunk of file
          */
-        int transferRounds = (chunkSize / mBufferSize) + 1;
+        int transferRounds = (chunkSize / mBufferSize) + ((chunkSize % mBufferSize == 0)? 0:1);
         for(int i = 0; i < mParallelPortsNum; i++)
         {
             for (int j = 0; j < transferRounds; j++)
             {
                 try
                 {
-                    fileStream.read(byteArray[i], j * mBufferSize, Math.min(mBufferSize, chunkSize - j * mBufferSize));
+                    fileStream.read(byteArray[i], j * mBufferSize, Math.min(mBufferSize, Math.min(chunkSize - j * mBufferSize, (int) mFile.length() - i * chunkSize - j * mBufferSize)));
                 }
                 catch (IOException e)
                 {

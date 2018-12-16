@@ -145,8 +145,9 @@ public class Client
              */
             for(int i = 0; i < dataPortsNumber; i++)
             {
-                System.out.println("Parallel data socket line number " + i + " has been " + parallelTransfers[i].getState());
+                //System.out.println("Parallel data socket line number " + i + " has been " + parallelTransfers[i].getState());
                 bs.write(parallelTransfers[i].getByteArray(), 0, parallelTransfers[i].getByteArray().length);
+                //bs.flush();
             }
             bs.close();
             mCommandLineSocket.close();

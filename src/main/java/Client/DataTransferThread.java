@@ -40,7 +40,7 @@ public class DataTransferThread extends Thread
         try
         {
             InputStream inputStream = mSocket.getInputStream();
-            int transferRounds = (mChunkSize / mBufferSize) + 1;
+            int transferRounds = (mChunkSize / mBufferSize) + ((mChunkSize % mBufferSize == 0)? 0:1);
             //byteArray = new byte[transferRounds * mBufferSize];
             byteArray = new byte[mChunkSize];
             for (int j = 0; j < transferRounds; j++)
@@ -48,6 +48,7 @@ public class DataTransferThread extends Thread
                 inputStream.read(byteArray, j * mBufferSize, Math.min(mBufferSize, mChunkSize - j * mBufferSize));
             }
             mSocket.close();
+            System.out.println("Parallel download on data socket line with port " + mSocket.getPort() + " finished. ");
         }
         catch (IOException ex)
         {

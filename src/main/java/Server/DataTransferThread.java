@@ -65,7 +65,7 @@ public class DataTransferThread extends Thread
         }
         catch (IOException e)
         {
-            System.err.println("Error in DATATRANSFERSOCKET Thread! write function!");
+            System.err.println("Error in data transfer Thread");
         }
 
 
